@@ -1,0 +1,389 @@
+/* ──────────────────────────────────────────────────────────────
+   Taller Master — Global Styles
+   Tailwind v4  +  Inter (Google Fonts)
+────────────────────────────────────────────────────────────── */
+
+/* Google Fonts — must appear before @import "tailwindcss" */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* Tailwind v4 */
+@import "tailwindcss";
+
+/* ── Tailwind v4 Theme Tokens ──────────────────────────────── */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+               'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ── Base Reset & Typography ───────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #0a0a0a; /* Sanchez Automecánica — near-black brand base */
+    color: #f1f5f9;
+    min-height: 100dvh;
+  }
+
+  /* Respect user's reduced-motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ── Custom Utilities ──────────────────────────────────────── */
+@layer utilities {
+  /* Tabular / mono number rendering */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Smooth scroll */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+
+  /* ── Touch-Optimized Targets (garage/gloves) ──────────── */
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* ── Tactile Press Feedback ───────────────────────────── */
+  .press-feedback {
+    transition: transform 0.1s ease;
+    cursor: pointer;
+  }
+  .press-feedback:active {
+    transform: scale(0.96);
+  }
+}
+
+/* ── Light Mode Design System ─────────────────────────────── */
+html[data-theme="light"],
+html.light,
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="light"] body,
+html.light body,
+[data-theme="light"] body {
+  background-color: #f3f4f6 !important;
+  color: #0f172a !important;
+}
+
+/* Base background overrides */
+[data-theme="light"] .min-h-screen.bg-\[\#0a0a0a\] {
+  background-color: #f3f4f6 !important;
+}
+
+/* Surfaces: Sidebars, Topbars, Modals, Cards */
+[data-theme="light"] aside,
+[data-theme="light"] aside nav,
+[data-theme="light"] header.bg-\[\#111\],
+[data-theme="light"] .bg-\[\#111\] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Subtle inner panels */
+[data-theme="light"] .bg-\[\#0a0a0a\],
+[data-theme="light"] .bg-\[\#141414\],
+[data-theme="light"] .bg-\[\#161616\],
+[data-theme="light"] .bg-black\/20 {
+  background-color: #f8fafc !important;
+}
+
+/* ── Mobile Drawer Animations ─────────────────────────────── */
+@keyframes slideRight {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-slideRight {
+  animation: slideRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* ── Skeleton Shimmer (loading placeholders) ──────────────── */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite ease-in-out;
+  border-radius: 0.75rem;
+}
+
+[data-theme="light"] .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 25%,
+    rgba(0, 0, 0, 0.08) 37%,
+    rgba(0, 0, 0, 0.04) 63%
+  );
+  background-size: 800px 100%;
+}
+
+/* Borders */
+[data-theme="light"] .border-\[\#1e1e1e\],
+[data-theme="light"] .border-\[\#222\],
+[data-theme="light"] .border-\[\#2a2a2a\],
+[data-theme="light"] .border-\[\#262626\],
+[data-theme="light"] .border-\[\#1a1a1a\] {
+  border-color: #e2e8f0 !important;
+}
+
+/* Form inputs & textareas */
+[data-theme="light"] input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] input:focus,
+[data-theme="light"] textarea:focus,
+[data-theme="light"] select:focus {
+  border-color: #d97706 !important;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.2) !important;
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Text Colors */
+[data-theme="light"] h1.text-white,
+[data-theme="light"] h2.text-white,
+[data-theme="light"] h3.text-white,
+[data-theme="light"] p.text-white,
+[data-theme="light"] span.text-white:not([style*="linear-gradient"] *):not(.bg-red-600 *),
+[data-theme="light"] .font-black.text-white,
+[data-theme="light"] .font-bold.text-white {
+  color: #0f172a !important;
+}
+
+/* Exceptions: Preserve contrast inside colored buttons and gradients */
+[data-theme="light"] [style*="linear-gradient"] p.text-white,
+[data-theme="light"] [style*="linear-gradient"] span.text-white,
+[data-theme="light"] [style*="linear-gradient"] .text-white,
+[data-theme="light"] .bg-red-600 .text-white,
+[data-theme="light"] .bg-red-500 .text-white,
+[data-theme="light"] .bg-blue-600 .text-white,
+[data-theme="light"] .bg-slate-900 .text-white {
+  color: #ffffff !important;
+}
+
+[data-theme="light"] .text-\[\#0a0a0a\] {
+  color: #0a0a0a !important;
+}
+
+/* Secondary & Muted text adjustments */
+[data-theme="light"] .text-slate-200,
+[data-theme="light"] .text-slate-300 {
+  color: #334155 !important;
+}
+
+[data-theme="light"] .text-slate-400 {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .text-slate-500 {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .text-slate-600 {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .text-slate-700 {
+  color: #94a3b8 !important;
+}
+
+/* Minimalist Cobalt & Sky text for light mode - high WCAG contrast on white */
+[data-theme="light"] .text-\[\#38bdf8\]:not(button[style*="linear-gradient"] *):not(div[style*="linear-gradient"] *),
+[data-theme="light"] .text-sky-400:not(button[style*="linear-gradient"] *):not(div[style*="linear-gradient"] *) {
+  color: #0284c7 !important;
+}
+
+/* Card hover and interactive states */
+[data-theme="light"] .hover\:bg-white\/5:hover {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="light"] .hover\:bg-\[\#161616\]:hover {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] .group:hover .group-hover\:text-white {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .group:hover .group-hover\:text-\[\#38bdf8\],
+[data-theme="light"] .group:hover .group-hover\:text-sky-400 {
+  color: #0284c7 !important;
+}
+
+/* Card shadows */
+[data-theme="light"] .shadow-xl,
+[data-theme="light"] .shadow-2xl,
+[data-theme="light"] .shadow-lg {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Badges */
+[data-theme="light"] .bg-violet-900\/60 {
+  background-color: #f5f3ff !important;
+  color: #6d28d9 !important;
+  border-color: #ddd6fe !important;
+}
+
+[data-theme="light"] .bg-blue-900\/60,
+[data-theme="light"] .bg-sky-500\/15 {
+  background-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border-color: #bfdbfe !important;
+}
+
+/* Remarks in service cards & detail */
+[data-theme="light"] .bg-sky-950\/20,
+[data-theme="light"] .bg-slate-900\/60 {
+  background-color: #f0f9ff !important;
+  border-color: #bae6fd !important;
+}
+
+[data-theme="light"] .text-sky-900\/80 {
+  color: #0369a1 !important;
+}
+
+[data-theme="light"] .text-sky-600 {
+  color: #0284c7 !important;
+}
+
+/* Unselected Service Type and Radio Cards */
+[data-theme="light"] .border-\[\#2a2a2a\].bg-\[\#0a0a0a\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Modal backgrounds */
+[data-theme="light"] .bg-black\/75 {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+}
+
+[data-theme="light"] .bg-\[\#111\]\/95 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Transitions for smooth theme toggle */
+body, aside, header, main, div, button, input {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* ── Print Styles ──────────────────────────────────────────── */
+@media print {
+  /* Page setup */
+  @page {
+    margin: 0.5in;
+    size: letter portrait;
+  }
+
+  /* Force background colors (for dark table headers) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide everything except the invoice document */
+  body > * {
+    display: none !important;
+  }
+
+  /* Show the invoice document container */
+  #invoice-document {
+    display: block !important;
+    position: static !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* Remove action bar and FABs */
+  .no-print,
+  .fab-bar {
+    display: none !important;
+  }
+
+  /* Remove padding that accounts for the sticky action bar */
+  .no-print-padding {
+    padding-top: 0 !important;
+  }
+
+  /* Ensure white background for invoice */
+  .bg-white,
+  [class*="bg-slate"] {
+    background-color: white !important;
+  }
+
+  /* Remove box shadows */
+  [class*="shadow"] {
+    box-shadow: none !important;
+  }
+
+  /* Avoid page breaks inside rows and financial blocks */
+  tr,
+  .print-no-break {
+    page-break-inside: avoid;
+  }
+
+  /* Remove border-radius for print */
+  [class*="rounded"] {
+    border-radius: 0 !important;
+  }
+
+  /* Heavier table borders for print clarity */
+  td, th {
+    border-color: #94a3b8 !important;
+  }
+
+  /* Financial summary heavy border */
+  .print-financial-box {
+    border: 2px solid #0f172a !important;
+  }
+}
