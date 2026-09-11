@@ -144,10 +144,24 @@ export default function App() {
     };
   }, []);
 
-  // ── Initial Supabase Data Fetch ────────────────────────────
+  const userId = session?.user?.id;
+  const isSessionReady = session !== undefined;
+
+  // ── Supabase Data Fetch on Authenticated Session ───────────
   useEffect(() => {
+    // Only query when user is authenticated (RLS requires auth token)
+    if (!userId) {
+      if (isSessionReady) setIsInitialLoading(false);
+      return;
+    }
+
     let isMounted = true;
+    setIsInitialLoading(true);
+
     async function loadInitialVehicles() {
+      // Small delay to ensure Supabase auth state is fully propagated internally
+      await new Promise(r => setTimeout(r, 150));
+      
       try {
         const { data, error } = await getAllVehicles();
         if (!error && isMounted) {
@@ -165,11 +179,12 @@ export default function App() {
         if (isMounted) setIsInitialLoading(false);
       }
     }
+
     loadInitialVehicles();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [userId, isSessionReady]);
 
   // ── Stats ──────────────────────────────────────────────────
   const stats = useMemo(() => {
