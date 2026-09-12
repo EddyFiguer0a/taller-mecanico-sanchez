@@ -387,3 +387,11 @@ body, aside, header, main, div, button, input {
     border: 2px solid #0f172a !important;
   }
 }
+@keyframes plate-entry {
+  0% { transform: scale(0.9) translateY(10px) rotateX(20deg); opacity: 0; box-shadow: 0 0 0 rgba(0,0,0,0); }
+  100% { transform: scale(1) translateY(0) rotateX(0deg); opacity: 1; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.1); }
+}
+@keyframes plate-shine {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  100% { transform: translateX(200%) skewX(-20deg); }
+}

@@ -12,6 +12,7 @@ import RecordPaymentModal from './components/RecordPaymentModal';
 import EditCustomerModal from './components/EditCustomerModal';
 import ImportJsonModal from './components/ImportJsonModal';
 import InvoiceView from './components/InvoiceView';
+import AnimatedLicensePlate from './components/AnimatedLicensePlate';
 import {
   getVehicleByPlate,
   getAllVehicles,
@@ -610,7 +611,10 @@ export default function App() {
               className="relative w-72 max-w-[85vw] bg-[#111] border-r border-[#1e1e1e] h-full flex flex-col shadow-2xl z-10 animate-slideRight"
             >
               {/* Drawer Header */}
-              <div className="p-5 border-b border-[#1e1e1e] flex items-center justify-between bg-[#141414]">
+              <div 
+                className="px-5 pb-5 border-b border-[#1e1e1e] flex items-center justify-between bg-[#141414]"
+                style={{ paddingTop: 'calc(env(safe-area-inset-top) + 20px)' }}
+              >
                 <div className="flex items-center gap-3">
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
@@ -731,7 +735,10 @@ export default function App() {
         <div className="flex-1 flex flex-col min-h-screen md:ml-60">
 
           {/* ── Mobile Header ── */}
-          <header className="md:hidden bg-[#111] border-b border-[#1e1e1e] px-4 py-3.5 sticky top-0 z-40 flex items-center justify-between shadow-sm">
+          <header 
+            className="md:hidden bg-[#111] border-b border-[#1e1e1e] px-4 pb-3.5 sticky top-0 z-40 flex items-center justify-between shadow-sm"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)' }}
+          >
             <div className="flex items-center gap-2">
               {vista === 'profile' && (
                 <button
@@ -1035,30 +1042,43 @@ export default function App() {
                     <div className="h-1" style={{ background: 'linear-gradient(90deg, #1d4ed8, #38bdf8, #1d4ed8)' }} />
 
                     <div className="p-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <span className="font-mono font-black text-sm bg-[#0a0a0a] text-white
-                                             px-3 py-1.5 rounded-lg border border-[#2a2a2a] uppercase tracking-[0.15em]">
-                              {autoActual.placa}
-                            </span>
-                            <span className="text-slate-500 text-xs font-medium">{autoActual.anio}</span>
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 sm:gap-6">
+                        
+                        {/* Mobile Top Row: Plate & Logo */}
+                        <div className="flex items-center justify-between w-full sm:hidden mb-1">
+                          <AnimatedLicensePlate placa={autoActual.placa} />
+                          <div className="w-[72px] h-[72px] bg-white rounded-xl flex items-center justify-center p-1.5 flex-shrink-0 shadow-lg border border-slate-200/10">
+                            <BrandLogo make={autoActual.marca} size="lg" />
                           </div>
-                          <h2 className="text-2xl font-black text-white leading-tight">
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          {/* Desktop Plate (Hidden on mobile) */}
+                          <div className="hidden sm:flex items-center gap-3 mb-3">
+                            <AnimatedLicensePlate placa={autoActual.placa} />
+                            <span className="text-slate-500 text-sm font-medium">{autoActual.anio}</span>
+                          </div>
+                          
+                          {/* Mobile Year */}
+                          <div className="sm:hidden mb-1 mt-1">
+                            <span className="text-slate-400 text-xs font-medium">{autoActual.anio}</span>
+                          </div>
+
+                          <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight">
                             {autoActual.marca} {autoActual.modelo}
                           </h2>
-                          <p className="text-sm text-slate-400 mt-0.5">
+                          <p className="text-sm sm:text-base text-slate-400 mt-1">
                             {autoActual.color}
                             {autoActual.vin && (
-                              <span className="ml-3 font-mono text-xs text-slate-600">
+                              <span className="ml-3 font-mono text-xs sm:text-sm text-slate-500 bg-slate-800/40 px-2 py-0.5 rounded-md">
                                 VIN: {autoActual.vin}
                               </span>
                             )}
                           </p>
                         </div>
 
-                        {/* Brand Logo */}
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-xl flex items-center justify-center p-2 flex-shrink-0 shadow-lg">
+                        {/* Desktop Brand Logo (Hidden on mobile) */}
+                        <div className="hidden sm:flex w-24 h-24 bg-white rounded-2xl items-center justify-center p-3 flex-shrink-0 shadow-xl border border-slate-200/10">
                           <BrandLogo make={autoActual.marca} size="lg" />
                         </div>
                       </div>

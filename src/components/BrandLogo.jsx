@@ -39,7 +39,7 @@ export default function BrandLogo({ make, size = 'md', light = false }) {
     <img
       src={logoPath}
       alt={make}
-      className={`${size === 'lg' ? 'max-w-full max-h-full' : dim.img} object-contain`}
+      className="w-full h-full object-contain"
       onError={() => setFailed(true)}
       loading="lazy"
     />

@@ -1,0 +1,22 @@
+{
+  "name": "Sanchez Automecánica",
+  "short_name": "Sanchez Auto",
+  "description": "Sistema de gestión interno para Sanchez Automecánica.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    {
+      "src": "/icon-sanchez.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-sanchez.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
