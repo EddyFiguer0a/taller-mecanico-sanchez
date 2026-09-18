@@ -40,6 +40,11 @@ export default function BrandLogo({ make, size = 'md', light = false }) {
       src={logoPath}
       alt={make}
       className="w-full h-full object-contain"
+      style={{
+        imageRendering: '-webkit-optimize-contrast',
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden',
+      }}
       onError={() => setFailed(true)}
       loading="lazy"
     />

@@ -12,11 +12,12 @@
 /* ── Tailwind v4 Theme Tokens ──────────────────────────────── */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-               'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 /* ── Base Reset & Typography ───────────────────────────────── */
 @layer base {
+
   *,
   *::before,
   *::after {
@@ -31,13 +32,15 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #0a0a0a; /* Sanchez Automecánica — near-black brand base */
+    background-color: #0a0a0a;
+    /* Sanchez Automecánica — near-black brand base */
     color: #f1f5f9;
     min-height: 100dvh;
   }
 
   /* Respect user's reduced-motion preference */
   @media (prefers-reduced-motion: reduce) {
+
     *,
     *::before,
     *::after {
@@ -49,6 +52,7 @@
 
 /* ── Custom Utilities ──────────────────────────────────────── */
 @layer utilities {
+
   /* Tabular / mono number rendering */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
@@ -70,6 +74,7 @@
     transition: transform 0.1s ease;
     cursor: pointer;
   }
+
   .press-feedback:active {
     transform: scale(0.96);
   }
@@ -113,13 +118,23 @@ html.light body,
 
 /* ── Mobile Drawer Animations ─────────────────────────────── */
 @keyframes slideRight {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .animate-slideRight {
@@ -132,29 +147,30 @@ html.light body,
 
 /* ── Skeleton Shimmer (loading placeholders) ──────────────── */
 @keyframes shimmer {
-  0% { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+  0% {
+    background-position: -400px 0;
+  }
+
+  100% {
+    background-position: 400px 0;
+  }
 }
 
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.04) 25%,
-    rgba(255, 255, 255, 0.08) 37%,
-    rgba(255, 255, 255, 0.04) 63%
-  );
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.04) 25%,
+      rgba(255, 255, 255, 0.08) 37%,
+      rgba(255, 255, 255, 0.04) 63%);
   background-size: 800px 100%;
   animation: shimmer 1.5s infinite ease-in-out;
   border-radius: 0.75rem;
 }
 
 [data-theme="light"] .skeleton {
-  background: linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0.04) 25%,
-    rgba(0, 0, 0, 0.08) 37%,
-    rgba(0, 0, 0, 0.04) 63%
-  );
+  background: linear-gradient(90deg,
+      rgba(0, 0, 0, 0.04) 25%,
+      rgba(0, 0, 0, 0.08) 37%,
+      rgba(0, 0, 0, 0.04) 63%);
   background-size: 800px 100%;
 }
 
@@ -313,12 +329,19 @@ html.light body,
 }
 
 /* Transitions for smooth theme toggle */
-body, aside, header, main, div, button, input {
+body,
+aside,
+header,
+main,
+div,
+button,
+input {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 /* ── Print Styles ──────────────────────────────────────────── */
 @media print {
+
   /* Page setup */
   @page {
     margin: 0.5in;
@@ -331,23 +354,20 @@ body, aside, header, main, div, button, input {
     print-color-adjust: exact !important;
   }
 
-  /* Hide everything except the invoice document */
-  body > * {
+  /* Hide elements not meant for print */
+  .no-print,
+  .fab-bar,
+  .print-hide {
     display: none !important;
   }
 
-  /* Show the invoice document container */
+  /* Show the invoice document container correctly */
   #invoice-document {
     display: block !important;
     position: static !important;
     max-width: 100% !important;
     padding: 0 !important;
-  }
-
-  /* Remove action bar and FABs */
-  .no-print,
-  .fab-bar {
-    display: none !important;
+    margin: 0 !important;
   }
 
   /* Remove padding that accounts for the sticky action bar */
@@ -355,10 +375,22 @@ body, aside, header, main, div, button, input {
     padding-top: 0 !important;
   }
 
-  /* Ensure white background for invoice */
+  /* Ensure white background for invoice and body with high specificity */
+  html, body, #root,
+  html[data-theme="light"] body,
+  html.light body,
+  [data-theme="light"] body,
+  html[data-theme="dark"] body,
+  html.dark body,
+  [data-theme="dark"] body,
   .bg-white,
   [class*="bg-slate"] {
     background-color: white !important;
+  }
+
+  /* Prevent min-h-screen from creating an extra page due to page margins */
+  .min-h-screen {
+    min-height: 0 !important;
   }
 
   /* Remove box shadows */
@@ -378,7 +410,8 @@ body, aside, header, main, div, button, input {
   }
 
   /* Heavier table borders for print clarity */
-  td, th {
+  td,
+  th {
     border-color: #94a3b8 !important;
   }
 
@@ -387,11 +420,27 @@ body, aside, header, main, div, button, input {
     border: 2px solid #0f172a !important;
   }
 }
+
 @keyframes plate-entry {
-  0% { transform: scale(0.9) translateY(10px) rotateX(20deg); opacity: 0; box-shadow: 0 0 0 rgba(0,0,0,0); }
-  100% { transform: scale(1) translateY(0) rotateX(0deg); opacity: 1; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.1); }
+  0% {
+    transform: scale(0.9) translateY(10px) rotateX(20deg);
+    opacity: 0;
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+
+  100% {
+    transform: scale(1) translateY(0) rotateX(0deg);
+    opacity: 1;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
 }
+
 @keyframes plate-shine {
-  0% { transform: translateX(-150%) skewX(-20deg); }
-  100% { transform: translateX(200%) skewX(-20deg); }
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+
+  100% {
+    transform: translateX(200%) skewX(-20deg);
+  }
 }

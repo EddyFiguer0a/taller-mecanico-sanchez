@@ -162,7 +162,7 @@ export default function App() {
     async function loadInitialVehicles() {
       // Small delay to ensure Supabase auth state is fully propagated internally
       await new Promise(r => setTimeout(r, 150));
-      
+
       try {
         const { data, error } = await getAllVehicles();
         if (!error && isMounted) {
@@ -498,7 +498,7 @@ export default function App() {
     <>
       {/* ── Offline Warning Banner ── */}
       {!isOnline && (
-        <div className="bg-rose-600 text-white font-bold text-xs py-2.5 px-4 flex items-center justify-center gap-2 sticky top-0 z-[100] shadow-lg">
+        <div className="bg-rose-600 text-white font-bold text-xs py-2.5 px-4 flex items-center justify-center gap-2 sticky top-0 z-[100] shadow-lg print-hide">
           <WifiOff size={16} />
           <span>⚠️ Sin conexión a internet — Por favor verifica tu red Wi-Fi o datos móviles.</span>
         </div>
@@ -506,7 +506,7 @@ export default function App() {
 
       {/* ── Full-screen Invoice Print / PDF ── */}
       {invoiceService && (
-        <div className="fixed inset-0 z-[60] bg-white overflow-auto">
+        <div className="fixed inset-0 z-[60] bg-white overflow-auto print:static print:overflow-visible">
           <InvoiceView
             service={invoiceService}
             vehicle={
@@ -526,7 +526,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="min-h-screen bg-[#0a0a0a] flex">
+      <div className={`min-h-screen bg-[#0a0a0a] flex ${invoiceService ? 'print-hide' : ''}`}>
 
         {/* ══════════════════════════════════════════════════════
             DESKTOP SIDEBAR
@@ -611,7 +611,7 @@ export default function App() {
               className="relative w-72 max-w-[85vw] bg-[#111] border-r border-[#1e1e1e] h-full flex flex-col shadow-2xl z-10 animate-slideRight"
             >
               {/* Drawer Header */}
-              <div 
+              <div
                 className="px-5 pb-5 border-b border-[#1e1e1e] flex items-center justify-between bg-[#141414]"
                 style={{ paddingTop: 'calc(env(safe-area-inset-top) + 20px)' }}
               >
@@ -735,7 +735,7 @@ export default function App() {
         <div className="flex-1 flex flex-col min-h-screen md:ml-60">
 
           {/* ── Mobile Header ── */}
-          <header 
+          <header
             className="md:hidden bg-[#111] border-b border-[#1e1e1e] px-4 pb-3.5 sticky top-0 z-40 flex items-center justify-between shadow-sm"
             style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)' }}
           >
@@ -1043,7 +1043,7 @@ export default function App() {
 
                     <div className="p-5">
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 sm:gap-6">
-                        
+
                         {/* Mobile Top Row: Plate & Logo */}
                         <div className="flex items-center justify-between w-full sm:hidden mb-1">
                           <AnimatedLicensePlate placa={autoActual.placa} />
@@ -1058,7 +1058,7 @@ export default function App() {
                             <AnimatedLicensePlate placa={autoActual.placa} />
                             <span className="text-slate-500 text-sm font-medium">{autoActual.anio}</span>
                           </div>
-                          
+
                           {/* Mobile Year */}
                           <div className="sm:hidden mb-1 mt-1">
                             <span className="text-slate-400 text-xs font-medium">{autoActual.anio}</span>

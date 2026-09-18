@@ -11,9 +11,6 @@ const fmtDate = (d) => {
   }
 };
 const fmtMi = (n) => (n != null && n !== '' ? Number(n).toLocaleString() : '—');
-/** Pad line-items table to at least MIN_ROWS total rows */
-const MIN_ROWS = 9;
-
 /**
  * InvoiceView — printable, shop-formatted invoice.
  * Replaces the current full viewport; hides on print via .no-print.
@@ -26,7 +23,6 @@ const MIN_ROWS = 9;
 export default function InvoiceView({ service, vehicle, onClose }) {
   const customer = vehicle?.cliente || service?.vehicle?.cliente || {};
   const lineas = service?.lineas || [];
-  const emptyRows = Math.max(0, MIN_ROWS - lineas.length);
 
   const tipoBadge = service?.tipo === 'Estimate'
     ? { bg: '#ede9fe', color: '#5b21b6', label: 'ESTIMATE / COTIZACIÓN' }
@@ -70,9 +66,9 @@ export default function InvoiceView({ service, vehicle, onClose }) {
           <div className="flex justify-between items-start mb-4 pb-4 border-b-2 border-slate-900">
             <div>
               <h1 className="text-3xl font-black text-slate-900 leading-tight tracking-tight">
-                SANCHEZ AUTOMECÁNICA
+                SANCHEZ AUTOMOTIVE
               </h1>
-              <p className="text-sm text-slate-500 font-semibold mt-0.5">Servicio y Reparación Mecánica Automotriz</p>
+              <p className="text-sm text-slate-500 font-semibold mt-0.5">Diésel & Gasolines Engines</p>
             </div>
 
             <div className="text-right">
@@ -220,14 +216,6 @@ export default function InvoiceView({ service, vehicle, onClose }) {
                   </td>
                 </tr>
               ))}
-              {/* Padding rows */}
-              {Array.from({ length: emptyRows }).map((_, i) => (
-                <tr key={`e-${i}`}>
-                  {[0, 1, 2, 3, 4].map((c) => (
-                    <td key={c} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', minHeight: '24px' }}>&nbsp;</td>
-                  ))}
-                </tr>
-              ))}
             </tbody>
           </table>
 
@@ -275,28 +263,14 @@ export default function InvoiceView({ service, vehicle, onClose }) {
             </div>
           </div>
 
-          {/* ══ SIGNATURE LINES ═══════════════════════════════════════ */}
-          <div className="grid grid-cols-2 gap-12 border-t-2 border-slate-900 pt-8 mt-4">
-            <div>
-              <div style={{ borderBottom: '1px solid #0f172a', marginBottom: '6px', paddingBottom: '24px' }} />
-              <p style={{ fontSize: '10px', color: '#64748b' }}>Technician Signature</p>
-            </div>
-            <div>
-              <div style={{ borderBottom: '1px solid #0f172a', marginBottom: '6px', paddingBottom: '24px' }} />
-              <p style={{ fontSize: '10px', color: '#64748b' }}>Customer Authorization Signature</p>
-              <p style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Date: _______ / _______ / _______</p>
-            </div>
-          </div>
-
-
 
           {/* ══ PRINT FOOTER ═══════════════════════════════════════ */}
           <div className="print-no-break" style={{ borderTop: '2px solid #e2e8f0', marginTop: '32px', paddingTop: '16px', textAlign: 'center' }}>
             <p style={{ fontSize: '10px', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              Sanchez Automecánica
+              Sanchez Automotive
             </p>
             <p style={{ fontSize: '9px', color: '#64748b', marginTop: '4px', lineHeight: '1.5' }}>
-              Thank you for your business! • Gracias por su preferencia
+              Thanks for your trust!
             </p>
           </div>
 
