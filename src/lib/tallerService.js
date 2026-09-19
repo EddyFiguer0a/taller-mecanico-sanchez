@@ -820,3 +820,33 @@ export async function updateCustomer(customerId, customerData) {
     return { data: null, error: err };
   }
 }
+
+/**
+ * Update an existing vehicle by its internal ID.
+ */
+export async function updateVehicleById(vehicleId, vehicleData) {
+  try {
+    const payload = {
+      license_plate: (vehicleData.license_plate || '').trim().toLowerCase().replace(/\s+/g, ''),
+      make:          vehicleData.make || '',
+      model:         vehicleData.model || '',
+      year:          parseInt(vehicleData.year, 10) || new Date().getFullYear(),
+      vin:           vehicleData.vin ? vehicleData.vin.trim().toUpperCase() : '',
+      color:         vehicleData.color || '',
+    };
+
+    const res = await supabase
+      .from('vehicles')
+      .update(payload)
+      .eq('id', vehicleId)
+      .select()
+      .single();
+
+    if (res.error) throw res.error;
+
+    return await getVehicleById(vehicleId);
+  } catch (err) {
+    console.error('[tallerService] updateVehicleById error:', err);
+    return { data: null, error: err };
+  }
+}

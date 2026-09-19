@@ -10,6 +10,7 @@ import NewVehicleModal from './components/NewVehicleModal';
 import NewServiceModal from './components/NewServiceModal';
 import RecordPaymentModal from './components/RecordPaymentModal';
 import EditCustomerModal from './components/EditCustomerModal';
+import EditVehicleModal from './components/EditVehicleModal';
 import ImportJsonModal from './components/ImportJsonModal';
 import InvoiceView from './components/InvoiceView';
 import AnimatedLicensePlate from './components/AnimatedLicensePlate';
@@ -100,6 +101,7 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [vista, setVista] = useState('search');
   const [showNewVehicle, setShowNewVehicle] = useState(false);
+  const [showEditVehicle, setShowEditVehicle] = useState(false);
   const [showNewService, setShowNewService] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [invoiceService, setInvoiceService] = useState(null);
@@ -285,6 +287,22 @@ export default function App() {
   // Note: Supabase persistence (customer + vehicle) is now handled
   // inside NewVehicleModal. This handler updates local React state with mutex protection.
   const isSavingVehiculoRef = useRef(false);
+  
+  const handleSaveVehicleEdit = (updatedVehicle) => {
+    setVehiculos((prev) => {
+      const nextMap = { ...prev };
+      // Si la placa cambió, borrar la entrada anterior para evitar duplicados en la lista local
+      if (autoActual?.placa && nextMap[autoActual.placa]) {
+        delete nextMap[autoActual.placa];
+      }
+      nextMap[updatedVehicle.placa] = updatedVehicle;
+      return nextMap;
+    });
+
+    setAutoActual(updatedVehicle);
+    setShowEditVehicle(false);
+  };
+
   const handleSaveVehiculo = (v) => {
     if (isSavingVehiculoRef.current) return;
     isSavingVehiculoRef.current = true;
@@ -1045,45 +1063,62 @@ export default function App() {
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 sm:gap-6">
 
                         {/* Mobile Top Row: Plate & Logo */}
-                        <div className="flex items-center justify-between w-full sm:hidden mb-1">
-                          <AnimatedLicensePlate placa={autoActual.placa} />
-                          <div className="w-[72px] h-[72px] bg-white rounded-xl flex items-center justify-center p-1.5 flex-shrink-0 shadow-lg border border-slate-200/10">
+                          <div className="flex items-center justify-between w-full sm:hidden mb-2">
+                            <AnimatedLicensePlate placa={autoActual.placa} />
+                            <div className="w-[60px] h-[60px] bg-white rounded-xl flex items-center justify-center p-1.5 flex-shrink-0 shadow-lg border border-slate-200/10">
+                              <BrandLogo make={autoActual.marca} size="lg" />
+                            </div>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            {/* Desktop Plate (Hidden on mobile) */}
+                            <div className="hidden sm:block mb-4">
+                              <AnimatedLicensePlate placa={autoActual.placa} />
+                            </div>
+
+                            {/* Headline & Edit Button */}
+                            <div className="flex items-center justify-between sm:justify-start gap-4 mb-2">
+                              <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight truncate">
+                                {autoActual.anio} {autoActual.marca} {autoActual.modelo}
+                              </h2>
+                              <button
+                                onClick={() => setShowEditVehicle(true)}
+                                className="flex-shrink-0 text-sky-400 hover:text-sky-300 flex items-center justify-center transition p-2 rounded-xl hover:bg-sky-500/10 border border-sky-500/20 active:scale-95 shadow-sm bg-[#111]"
+                                title="Editar datos del vehículo"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                            </div>
+
+                            {/* Color & VIN */}
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                              {autoActual.color && (
+                                <span className="text-sm sm:text-base text-slate-300 font-medium">
+                                  {autoActual.color}
+                                </span>
+                              )}
+                              
+                              {autoActual.color && autoActual.vin && (
+                                <span className="text-slate-600 font-black px-1">&bull;</span>
+                              )}
+
+                              {autoActual.vin && (
+                                <div className="flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/20 text-sky-400 px-2.5 py-1 rounded-lg">
+                                  <span className="font-mono text-xs sm:text-sm font-bold tracking-wide uppercase">
+                                    VIN: {autoActual.vin}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Desktop Brand Logo (Hidden on mobile) */}
+                          <div className="hidden sm:flex w-24 h-24 bg-white rounded-2xl items-center justify-center p-3 flex-shrink-0 shadow-xl border border-slate-200/10">
                             <BrandLogo make={autoActual.marca} size="lg" />
                           </div>
                         </div>
 
-                        <div className="flex-1 min-w-0">
-                          {/* Desktop Plate (Hidden on mobile) */}
-                          <div className="hidden sm:flex items-center gap-3 mb-3">
-                            <AnimatedLicensePlate placa={autoActual.placa} />
-                            <span className="text-slate-500 text-sm font-medium">{autoActual.anio}</span>
-                          </div>
-
-                          {/* Mobile Year */}
-                          <div className="sm:hidden mb-1 mt-1">
-                            <span className="text-slate-400 text-xs font-medium">{autoActual.anio}</span>
-                          </div>
-
-                          <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight">
-                            {autoActual.marca} {autoActual.modelo}
-                          </h2>
-                          <p className="text-sm sm:text-base text-slate-400 mt-1">
-                            {autoActual.color}
-                            {autoActual.vin && (
-                              <span className="ml-3 font-mono text-xs sm:text-sm text-slate-500 bg-slate-800/40 px-2 py-0.5 rounded-md">
-                                VIN: {autoActual.vin}
-                              </span>
-                            )}
-                          </p>
-                        </div>
-
-                        {/* Desktop Brand Logo (Hidden on mobile) */}
-                        <div className="hidden sm:flex w-24 h-24 bg-white rounded-2xl items-center justify-center p-3 flex-shrink-0 shadow-xl border border-slate-200/10">
-                          <BrandLogo make={autoActual.marca} size="lg" />
-                        </div>
-                      </div>
-
-                      {/* Customer Panel */}
+                        {/* Customer Panel */}
                       <div className="mt-4 bg-[#0a0a0a] rounded-xl p-4 border border-[#1e1e1e]">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.12em]">
@@ -1420,6 +1455,15 @@ export default function App() {
       {/* ═══════════════════════════════════════════════════════
           MODALS
       ═══════════════════════════════════════════════════════ */}
+
+      
+      {showEditVehicle && autoActual && (
+        <EditVehicleModal
+          vehicle={autoActual}
+          onSave={handleSaveVehicleEdit}
+          onClose={() => setShowEditVehicle(false)}
+        />
+      )}
 
       {showNewVehicle && (
         <NewVehicleModal
