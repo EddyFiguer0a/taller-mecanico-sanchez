@@ -3,6 +3,7 @@ import {
   Search, Plus, FileText, Camera, Wrench, X, AlertCircle,
   Car, Clock, ChevronRight, Receipt, Users, Home, WifiOff, Sun, Moon,
   ClipboardList, LogOut, Pencil, DollarSign, FileJson,
+  Trash2, Ban, AlertTriangle,
 } from 'lucide-react';
 import BrandLogo from './components/BrandLogo';
 import LoginModal from './components/LoginModal';
@@ -20,6 +21,8 @@ import {
   getSession,
   signOut,
   attachPhotoToInvoice,
+  voidInvoice,
+  deleteInvoice,
 } from './lib/tallerService';
 import { supabase } from './lib/supabaseClient';
 
@@ -48,6 +51,13 @@ function SkeletonCard() {
 
 // ─── TipoBadge (high-contrast for garage visibility) ─────────
 function TipoBadge({ tipo }) {
+  if (tipo === 'Cancelled') {
+    return (
+      <span className="text-xs sm:text-sm font-black px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/40">
+        🚫 ANULADA
+      </span>
+    );
+  }
   const isEstimate = tipo === 'Estimate';
   return (
     <span className={`text-xs sm:text-sm font-black px-2.5 py-1 rounded-lg ${isEstimate
@@ -103,8 +113,11 @@ export default function App() {
   const [showNewVehicle, setShowNewVehicle] = useState(false);
   const [showEditVehicle, setShowEditVehicle] = useState(false);
   const [showNewService, setShowNewService] = useState(false);
+  const [editingService, setEditingService] = useState(null); // Existing service object to edit
   const [selectedService, setSelectedService] = useState(null);
   const [invoiceService, setInvoiceService] = useState(null);
+  const [voidModalData, setVoidModalData] = useState(null); // { service, vehicle }
+  const [deleteModalData, setDeleteModalData] = useState(null); // { service, vehicle }
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [paymentModalData, setPaymentModalData] = useState(null); // { service, vehicle }
   const [editingCustomerData, setEditingCustomerData] = useState(null); // { customer, vehiclePlate }
@@ -287,7 +300,7 @@ export default function App() {
   // Note: Supabase persistence (customer + vehicle) is now handled
   // inside NewVehicleModal. This handler updates local React state with mutex protection.
   const isSavingVehiculoRef = useRef(false);
-  
+
   const handleSaveVehicleEdit = (updatedVehicle) => {
     setVehiculos((prev) => {
       const nextMap = { ...prev };
@@ -328,19 +341,127 @@ export default function App() {
       // If a full refreshed vehicle object was returned from Supabase
       if (updatedVehicleOrService?.placa && updatedVehicleOrService?.historial) {
         setVehiculos((p) => ({ ...p, [updatedVehicleOrService.placa]: updatedVehicleOrService }));
-        setAutoActual(updatedVehicleOrService);
+        if (autoActual?.placa === updatedVehicleOrService.placa || !autoActual) {
+          setAutoActual(updatedVehicleOrService);
+        }
+        if (selectedService) {
+          const found = updatedVehicleOrService.historial.find((s) => s.id === selectedService.id);
+          if (found) setSelectedService(found);
+        }
       } else if (autoActual) {
         // If service record was passed directly
         const s = updatedVehicleOrService;
-        const updated = { ...autoActual, historial: [s, ...(autoActual.historial || [])] };
+        const exists = (autoActual.historial || []).some((item) => item.id === s.id);
+        const updatedHistorial = exists
+          ? autoActual.historial.map((item) => (item.id === s.id ? s : item))
+          : [s, ...(autoActual.historial || [])];
+        const updated = { ...autoActual, historial: updatedHistorial };
         setVehiculos((p) => ({ ...p, [autoActual.placa]: updated }));
         setAutoActual(updated);
+        if (selectedService?.id === s.id) {
+          setSelectedService(s);
+        }
       }
       setShowNewService(false);
+      setEditingService(null);
     } finally {
       setTimeout(() => {
         isSavingServicioRef.current = false;
       }, 500);
+    }
+  };
+
+  // ── Void / Anular Invoice Handlers (Enterprise Method 1) ──
+  const [isVoiding, setIsVoiding] = useState(false);
+  const [voidReason, setVoidReason] = useState('Cancelada por el taller');
+  const [voidError, setVoidError] = useState(null);
+
+  const handleOpenVoidModal = (service, vehicle) => {
+    setVoidReason('Cancelada por el taller');
+    setVoidError(null);
+    setVoidModalData({ service, vehicle });
+  };
+
+  const handleConfirmVoid = async () => {
+    if (!voidModalData?.service?.id) return;
+    setIsVoiding(true);
+    setVoidError(null);
+    try {
+      const { error } = await voidInvoice(voidModalData.service.id, voidReason);
+      if (error) throw error;
+
+      const plate = voidModalData.vehicle?.placa || autoActual?.placa;
+      if (plate) {
+        const { data: refreshed } = await getVehicleByPlate(plate);
+        if (refreshed) {
+          setVehiculos((p) => ({ ...p, [refreshed.placa]: refreshed }));
+          if (autoActual?.placa === refreshed.placa || !autoActual) {
+            setAutoActual(refreshed);
+          }
+          if (selectedService?.id === voidModalData.service.id) {
+            const found = (refreshed.historial || []).find((s) => s.id === voidModalData.service.id);
+            if (found) setSelectedService(found);
+          }
+        }
+      }
+      setVoidModalData(null);
+    } catch (err) {
+      console.error('Error anulando factura:', err);
+      setVoidError(err.message || 'No se pudo anular la factura. Inténtalo de nuevo.');
+    } finally {
+      setIsVoiding(false);
+    }
+  };
+
+  // ── Delete Invoice Permanently Handlers ───────────────────
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const handleOpenDeleteModal = (service, vehicle) => {
+    setDeleteError(null);
+    setDeleteModalData({ service, vehicle });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModalData?.service?.id) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const { error } = await deleteInvoice(deleteModalData.service.id);
+      if (error) throw error;
+
+      const plate = deleteModalData.vehicle?.placa || autoActual?.placa;
+      if (plate) {
+        const { data: refreshed } = await getVehicleByPlate(plate);
+        if (refreshed) {
+          setVehiculos((p) => ({ ...p, [refreshed.placa]: refreshed }));
+          if (autoActual?.placa === refreshed.placa) {
+            setAutoActual(refreshed);
+          }
+        } else {
+          // Fallback optimistic filter
+          setVehiculos((p) => {
+            const v = p[plate];
+            if (!v) return p;
+            const updated = { ...v, historial: (v.historial || []).filter((s) => s.id !== deleteModalData.service.id) };
+            if (autoActual?.placa === plate) setAutoActual(updated);
+            return { ...p, [plate]: updated };
+          });
+        }
+      }
+
+      if (selectedService?.id === deleteModalData.service.id) {
+        setSelectedService(null);
+      }
+      if (invoiceService?.id === deleteModalData.service.id) {
+        setInvoiceService(null);
+      }
+      setDeleteModalData(null);
+    } catch (err) {
+      console.error('Error eliminando factura:', err);
+      setDeleteError(err.message || 'No se pudo eliminar la factura. Inténtalo de nuevo.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -539,6 +660,11 @@ export default function App() {
                 cliente: invoiceService.cliente || { nombre: 'Cliente General' },
               }
             }
+            onEdit={(serv) => {
+              const veh = serv.vehicle || autoActual || Object.values(vehiculos).find(v => (v.historial || []).some(s => s.id === serv.id));
+              setInvoiceService(null);
+              setEditingService({ ...serv, vehicle: veh });
+            }}
             onClose={() => setInvoiceService(null)}
           />
         </div>
@@ -1063,62 +1189,62 @@ export default function App() {
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 sm:gap-6">
 
                         {/* Mobile Top Row: Plate & Logo */}
-                          <div className="flex items-center justify-between w-full sm:hidden mb-2">
-                            <AnimatedLicensePlate placa={autoActual.placa} />
-                            <div className="w-[60px] h-[60px] bg-white rounded-xl flex items-center justify-center p-1.5 flex-shrink-0 shadow-lg border border-slate-200/10">
-                              <BrandLogo make={autoActual.marca} size="lg" />
-                            </div>
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            {/* Desktop Plate (Hidden on mobile) */}
-                            <div className="hidden sm:block mb-4">
-                              <AnimatedLicensePlate placa={autoActual.placa} />
-                            </div>
-
-                            {/* Headline & Edit Button */}
-                            <div className="flex items-center justify-between sm:justify-start gap-4 mb-2">
-                              <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight truncate">
-                                {autoActual.anio} {autoActual.marca} {autoActual.modelo}
-                              </h2>
-                              <button
-                                onClick={() => setShowEditVehicle(true)}
-                                className="flex-shrink-0 text-sky-400 hover:text-sky-300 flex items-center justify-center transition p-2 rounded-xl hover:bg-sky-500/10 border border-sky-500/20 active:scale-95 shadow-sm bg-[#111]"
-                                title="Editar datos del vehículo"
-                              >
-                                <Pencil size={16} />
-                              </button>
-                            </div>
-
-                            {/* Color & VIN */}
-                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                              {autoActual.color && (
-                                <span className="text-sm sm:text-base text-slate-300 font-medium">
-                                  {autoActual.color}
-                                </span>
-                              )}
-                              
-                              {autoActual.color && autoActual.vin && (
-                                <span className="text-slate-600 font-black px-1">&bull;</span>
-                              )}
-
-                              {autoActual.vin && (
-                                <div className="flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/20 text-sky-400 px-2.5 py-1 rounded-lg">
-                                  <span className="font-mono text-xs sm:text-sm font-bold tracking-wide uppercase">
-                                    VIN: {autoActual.vin}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Desktop Brand Logo (Hidden on mobile) */}
-                          <div className="hidden sm:flex w-24 h-24 bg-white rounded-2xl items-center justify-center p-3 flex-shrink-0 shadow-xl border border-slate-200/10">
+                        <div className="flex items-center justify-between w-full sm:hidden mb-2">
+                          <AnimatedLicensePlate placa={autoActual.placa} />
+                          <div className="w-[60px] h-[60px] bg-white rounded-xl flex items-center justify-center p-1.5 flex-shrink-0 shadow-lg border border-slate-200/10">
                             <BrandLogo make={autoActual.marca} size="lg" />
                           </div>
                         </div>
 
-                        {/* Customer Panel */}
+                        <div className="flex-1 min-w-0">
+                          {/* Desktop Plate (Hidden on mobile) */}
+                          <div className="hidden sm:block mb-4">
+                            <AnimatedLicensePlate placa={autoActual.placa} />
+                          </div>
+
+                          {/* Headline & Edit Button */}
+                          <div className="flex items-center justify-between sm:justify-start gap-4 mb-2">
+                            <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight truncate">
+                              {autoActual.anio} {autoActual.marca} {autoActual.modelo}
+                            </h2>
+                            <button
+                              onClick={() => setShowEditVehicle(true)}
+                              className="flex-shrink-0 text-sky-400 hover:text-sky-300 flex items-center justify-center transition p-2 rounded-xl hover:bg-sky-500/10 border border-sky-500/20 active:scale-95 shadow-sm bg-[#111]"
+                              title="Editar datos del vehículo"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                          </div>
+
+                          {/* Color & VIN */}
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {autoActual.color && (
+                              <span className="text-sm sm:text-base text-slate-300 font-medium">
+                                {autoActual.color}
+                              </span>
+                            )}
+
+                            {autoActual.color && autoActual.vin && (
+                              <span className="text-slate-600 font-black px-1">&bull;</span>
+                            )}
+
+                            {autoActual.vin && (
+                              <div className="flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/20 text-sky-400 px-2.5 py-1 rounded-lg">
+                                <span className="font-mono text-xs sm:text-sm font-bold tracking-wide uppercase">
+                                  VIN: {autoActual.vin}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Desktop Brand Logo (Hidden on mobile) */}
+                        <div className="hidden sm:flex w-24 h-24 bg-white rounded-2xl items-center justify-center p-3 flex-shrink-0 shadow-xl border border-slate-200/10">
+                          <BrandLogo make={autoActual.marca} size="lg" />
+                        </div>
+                      </div>
+
+                      {/* Customer Panel */}
                       <div className="mt-4 bg-[#0a0a0a] rounded-xl p-4 border border-[#1e1e1e]">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.12em]">
@@ -1237,7 +1363,11 @@ export default function App() {
                           <div className="border-t border-[#1e1e1e] px-4 py-3 flex items-center justify-between">
                             <div>
                               <p className="text-2xl font-black text-white tabular-nums">{fmt(serv.total)}</p>
-                              {serv.saldo > 0 ? (
+                              {serv.isAnulada ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-black bg-red-500/20 text-red-400 px-2 py-0.5 rounded-md border border-red-500/30 mt-0.5">
+                                  🚫 Anulada (Saldo $0.00)
+                                </span>
+                              ) : serv.saldo > 0 ? (
                                 <span className="inline-flex items-center gap-1 text-xs font-black bg-red-500/20 text-red-400 px-2 py-0.5 rounded-md border border-red-500/30 mt-0.5">
                                   ⚠ Due: {fmt(serv.saldo)}
                                 </span>
@@ -1392,19 +1522,30 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="border-t sm:border-t-0 sm:border-l border-[#1e1e1e] p-4 flex flex-row sm:flex-col items-center sm:items-end justify-between bg-black/20 sm:w-40">
+                        <div className="border-t sm:border-t-0 sm:border-l border-[#1e1e1e] p-4 flex flex-row sm:flex-col items-center sm:items-end justify-between bg-black/20 sm:w-44">
                           <div className="text-left sm:text-right">
                             <p className="text-lg font-black text-white tabular-nums">{fmt(serv.total)}</p>
-                            {serv.saldo > 0 ? (
+                            {serv.isAnulada ? (
+                              <p className="text-xs text-red-400 font-bold">🚫 Anulada</p>
+                            ) : serv.saldo > 0 ? (
                               <p className="text-xs text-red-400 font-semibold">Due: {fmt(serv.saldo)}</p>
                             ) : serv.total > 0 ? (
                               <p className="text-xs text-emerald-500 font-semibold">Paid</p>
                             ) : null}
                           </div>
-                          <div className="flex items-center gap-2 mt-2">
+                          <div className="flex items-center gap-1.5 mt-2">
+                            <button
+                              onClick={() => {
+                                setEditingService(serv);
+                              }}
+                              className="text-xs font-bold text-sky-400 hover:text-sky-300 p-1.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg border border-sky-500/25 transition active:scale-95 cursor-pointer"
+                              title="Editar Factura / Cotización"
+                            >
+                              <Pencil size={13} />
+                            </button>
                             <button
                               onClick={() => handleViewInvoice(serv)}
-                              className="text-xs font-bold text-sky-400 hover:text-sky-300 py-1.5 px-2.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg border border-sky-500/25 transition flex items-center gap-1 active:scale-95 cursor-pointer"
+                              className="text-xs font-bold text-sky-400 hover:text-sky-300 py-1.5 px-2 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg border border-sky-500/25 transition flex items-center gap-1 active:scale-95 cursor-pointer"
                               title="Ver e Imprimir PDF"
                             >
                               <FileText size={13} />
@@ -1412,7 +1553,7 @@ export default function App() {
                             </button>
                             <button
                               onClick={() => setSelectedService(serv)}
-                              className="text-xs font-bold text-slate-300 hover:text-white py-1.5 px-2.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
+                              className="text-xs font-bold text-slate-300 hover:text-white py-1.5 px-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition active:scale-95 cursor-pointer"
                             >
                               Details
                             </button>
@@ -1456,7 +1597,7 @@ export default function App() {
           MODALS
       ═══════════════════════════════════════════════════════ */}
 
-      
+
       {showEditVehicle && autoActual && (
         <EditVehicleModal
           vehicle={autoActual}
@@ -1473,12 +1614,16 @@ export default function App() {
         />
       )}
 
-      {showNewService && autoActual && (
+      {(showNewService || editingService) && (editingService?.vehicle || autoActual) && (
         <NewServiceModal
-          vehicle={autoActual}
+          vehicle={editingService?.vehicle || autoActual}
           nextInvoiceNumber={getNextInvoiceNumber()}
+          serviceToEdit={editingService}
           onSave={handleSaveServicio}
-          onClose={() => setShowNewService(false)}
+          onClose={() => {
+            setShowNewService(false);
+            setEditingService(null);
+          }}
         />
       )}
 
@@ -1726,8 +1871,222 @@ export default function App() {
                 )}
               </div>
 
+              {/* Annulled alert if applicable */}
+              {selectedService.isAnulada && (
+                <div className="bg-red-950/40 border border-red-800/60 rounded-xl p-4 flex items-start gap-3">
+                  <Ban size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-red-300 uppercase tracking-wider">
+                      Factura Anulada / Cancelada
+                    </p>
+                    <p className="text-xs text-red-400 mt-0.5 leading-relaxed">
+                      Esta factura no genera saldo pendiente ni computa en ingresos.
+                      {selectedService.motivoAnulacion && (
+                        <span className="block mt-1 text-slate-300 font-normal">
+                          <strong>Motivo:</strong> {selectedService.motivoAnulacion}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
 
+              {/* Administrative Actions Bar */}
+              <div className="border-t border-[#1e1e1e] pt-4 space-y-2.5">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Acciones de Factura</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const veh = selectedService.vehicle || autoActual || Object.values(vehiculos).find(v => (v.historial || []).some(s => s.id === selectedService.id));
+                      setEditingService({ ...selectedService, vehicle: veh });
+                      setSelectedService(null);
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 hover:text-sky-300 border border-sky-500/30 font-bold text-xs transition active:scale-95 cursor-pointer shadow-sm"
+                  >
+                    <Pencil size={13} />
+                    <span>Editar</span>
+                  </button>
 
+                  <button
+                    type="button"
+                    onClick={() => handleViewInvoice(selectedService)}
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 font-bold text-xs transition active:scale-95 cursor-pointer"
+                  >
+                    <FileText size={13} />
+                    <span>PDF / Print</span>
+                  </button>
+
+                  {!selectedService.isAnulada ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const veh = selectedService.vehicle || autoActual || Object.values(vehiculos).find(v => (v.historial || []).some(s => s.id === selectedService.id));
+                        handleOpenVoidModal(selectedService, veh);
+                      }}
+                      className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-amber-500/30 font-bold text-xs transition active:scale-95 cursor-pointer"
+                      title="Anular factura conservando folio para auditoría"
+                    >
+                      <Ban size={13} />
+                      <span>Anular</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-center text-[11px] font-bold text-slate-600 bg-black/40 border border-[#222] rounded-xl py-2.5">
+                      Anulada
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const veh = selectedService.vehicle || autoActual || Object.values(vehiculos).find(v => (v.historial || []).some(s => s.id === selectedService.id));
+                      handleOpenDeleteModal(selectedService, veh);
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 font-bold text-xs transition active:scale-95 cursor-pointer"
+                    title="Eliminar de la base de datos"
+                  >
+                    <Trash2 size={13} />
+                    <span>Eliminar</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Void / Anular Modal (Enterprise Standard Method 1) ── */}
+      {voidModalData && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4"
+          onClick={(e) => e.target === e.currentTarget && !isVoiding && setVoidModalData(null)}
+        >
+          <div className="bg-[#111] border border-amber-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-xl text-amber-400 flex-shrink-0">
+                <Ban size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">
+                  Anular Factura {voidModalData.service.invoiceNumber}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Estándar empresarial: el folio se mantendrá con saldo $0.00 en la base de datos para no alterar la secuencia ni generar huecos contables.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                Motivo de anulación
+              </label>
+              <input
+                type="text"
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                placeholder="Ej: Cancelada por cliente, Error en piezas..."
+                disabled={isVoiding}
+                className="w-full bg-[#0a0a0a] border border-[#2a2a2a] focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none transition"
+              />
+            </div>
+
+            {voidError && (
+              <div className="p-3 bg-red-950/50 border border-red-800/60 rounded-xl text-xs text-red-400">
+                {voidError}
+              </div>
+            )}
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setVoidModalData(null)}
+                disabled={isVoiding}
+                className="flex-1 py-2.5 rounded-xl border border-[#2a2a2a] text-slate-400 font-semibold hover:bg-white/5 transition text-xs active:scale-95 disabled:opacity-40 cursor-pointer"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmVoid}
+                disabled={isVoiding}
+                className="flex-[1.5] py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs transition active:scale-95 flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
+              >
+                {isVoiding ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <span>Anulando…</span>
+                  </>
+                ) : (
+                  <>
+                    <Ban size={14} />
+                    <span>Confirmar Anulación</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Modal (Permanent Hard Delete) ── */}
+      {deleteModalData && (
+        <div
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[90] flex items-center justify-center p-4"
+          onClick={(e) => e.target === e.currentTarget && !isDeleting && setDeleteModalData(null)}
+        >
+          <div className="bg-[#111] border border-rose-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-xl text-rose-400 flex-shrink-0">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">
+                  ¿Eliminar {deleteModalData.service.tipo === 'Estimate' ? 'Cotización' : 'Factura'}?
+                </h3>
+                <p className="font-mono text-xs text-rose-400 font-bold mt-0.5">
+                  {deleteModalData.service.invoiceNumber}
+                </p>
+                <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                  ⚠️ Esta acción borrará permanentemente este registro y sus líneas de trabajo en Supabase.
+                  Esta operación <strong>no se puede deshacer</strong>.
+                </p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="p-3 bg-red-950/50 border border-red-800/60 rounded-xl text-xs text-red-400">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteModalData(null)}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 rounded-xl border border-[#2a2a2a] text-slate-400 font-semibold hover:bg-white/5 transition text-xs active:scale-95 disabled:opacity-40 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="flex-[1.5] py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs transition active:scale-95 flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30 disabled:opacity-50 cursor-pointer"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Eliminando…</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Eliminar Definitivamente</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { X, Plus, Trash2, Camera, AlertCircle, Sparkles, Image } from 'lucide-react';
+import { X, Plus, Trash2, Camera, AlertCircle, Sparkles, Image, Edit3 } from 'lucide-react';
 import { CANNED_SERVICES } from '../data/mockData';
 import {
   createInvoice,
+  updateCompleteInvoice,
   getVehicleByPlate,
   uploadInvoicePhoto,
   isUUID,
@@ -12,48 +13,69 @@ import {
 } from '../lib/tallerService';
 
 const PAYMENT_METHODS = [
-  { key: 'Cash',    label: 'Cash',                  icon: '💵' },
-  { key: 'Check',   label: 'Check',                 icon: '📄' },
+  { key: 'Cash', label: 'Cash', icon: '💵' },
+  { key: 'Check', label: 'Check', icon: '📄' },
 ];
 
 const PHOTO_CATEGORIES = [
-  { key: 'invoice',  label: 'Factura / Recibo', icon: '📄' },
+  { key: 'invoice', label: 'Factura / Recibo', icon: '📄' },
   { key: 'odometer', label: 'Odómetro / Millas', icon: '⏱️' },
-  { key: 'damage',   label: 'Daño Previo / Intake', icon: '⚠️' },
-  { key: 'part',     label: 'Pieza / Trabajo', icon: '🔧' },
+  { key: 'damage', label: 'Daño Previo / Intake', icon: '⚠️' },
+  { key: 'part', label: 'Pieza / Trabajo', icon: '🔧' },
 ];
 
 const fmt = (n) => `$${(parseFloat(n) || 0).toFixed(2)}`;
 
 /**
- * NewServiceModal — full service / invoice entry modal.
+ * NewServiceModal — full service / invoice entry & edit modal.
  *
  * Props:
  *   vehicle            {object} — The current vehicle + customer object
  *   nextInvoiceNumber  {string} — Pre-generated invoice number (INV-XXXX)
- *   onSave             {fn}    — Called with the completed service object
- *   onClose            {fn}    — Closes the modal
+ *   serviceToEdit      {object} — [Optional] Existing service to edit
+ *   onSave             {fn}     — Called with the completed service object
+ *   onClose            {fn}     — Closes the modal
  */
-export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, onClose }) {
-  const [tipo, setTipo] = useState('Final Invoice');
+export default function NewServiceModal({ vehicle, nextInvoiceNumber, serviceToEdit, onSave, onClose }) {
+  const isEditMode = Boolean(serviceToEdit);
+  const activeInvoiceNumber = isEditMode ? serviceToEdit.invoiceNumber : nextInvoiceNumber;
 
-  const [form, setForm] = useState({
-    fecha:               new Date().toISOString().split('T')[0],
-    kilometrajeEntrada:  '',
-    kilometrajeSalida:   '',
-    metodoPago:          'Cash',
-    impuesto:            '',
-    deposito:            '',
-    observaciones:       '',
-    tecnico:             'Gerardo M.',
+  const [tipo, setTipo] = useState(() => (serviceToEdit?.tipo === 'Estimate' ? 'Estimate' : 'Final Invoice'));
+
+  const [form, setForm] = useState(() => ({
+    fecha: serviceToEdit?.fecha || new Date().toISOString().split('T')[0],
+    kilometrajeEntrada: serviceToEdit?.kilometrajeEntrada != null && serviceToEdit.kilometrajeEntrada !== 0 ? serviceToEdit.kilometrajeEntrada : '',
+    kilometrajeSalida: serviceToEdit?.kilometrajeSalida != null && serviceToEdit.kilometrajeSalida !== 0 ? serviceToEdit.kilometrajeSalida : '',
+    metodoPago: serviceToEdit?.metodoPago || 'Cash',
+    impuesto: serviceToEdit?.impuesto != null && serviceToEdit.impuesto !== 0 ? serviceToEdit.impuesto : '',
+    deposito: serviceToEdit?.deposito != null && serviceToEdit.deposito !== 0 ? serviceToEdit.deposito : '',
+    observaciones: serviceToEdit?.observaciones || '',
+    tecnico: serviceToEdit?.tecnico || 'Gerardo M.',
+  }));
+
+  const [lineas, setLineas] = useState(() => {
+    if (serviceToEdit?.lineas && serviceToEdit.lineas.length > 0) {
+      return serviceToEdit.lineas.map((l, idx) => ({
+        id: l.id || Date.now() + idx,
+        qty: l.qty !== '' ? l.qty : 1,
+        partNo: l.partNo || l.part_number || '',
+        descripcion: l.descripcion || l.description || '',
+        precioUnit: l.precioUnit ?? l.unit_price ?? '',
+      }));
+    }
+    return [{ id: 1, qty: '', partNo: '', descripcion: '', precioUnit: '' }];
   });
 
-  const [lineas, setLineas] = useState(() => [
-    { id: 1, qty: '', partNo: '', descripcion: '', precioUnit: '' },
-  ]);
-
   // Multi-photo state: array of { id, url, file, categoria, categoriaLabel, caption }
-  const [fotos, setFotos] = useState([]);
+  const [fotos, setFotos] = useState(() => {
+    if (serviceToEdit?.fotos && serviceToEdit.fotos.length > 0) {
+      return serviceToEdit.fotos;
+    }
+    if (serviceToEdit?.facturaImg) {
+      return [{ id: 'primary', url: serviceToEdit.facturaImg, categoria: 'invoice', categoriaLabel: 'Factura / Recibo', caption: '' }];
+    }
+    return [];
+  });
   const [selectedPhotoCategory, setSelectedPhotoCategory] = useState('invoice');
 
   // Supabase loading & error states
@@ -123,9 +145,9 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
     [lineas]
   );
   const impuesto = Math.max(0, parseFloat(form.impuesto) || 0);
-  const total    = subtotal + impuesto;
+  const total = subtotal + impuesto;
   const deposito = Math.max(0, parseFloat(form.deposito) || 0);
-  const saldo    = Math.max(0, total - deposito);
+  const saldo = Math.max(0, total - deposito);
 
   // ── Camera / Multi-Photo Studio ────────────────────────────
   const handleFotosUpload = (e) => {
@@ -192,12 +214,12 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
           // Provision customer in Supabase
           const { data: custData, error: custErr } = await upsertCustomer({
             full_name: vehicle.cliente?.nombre || 'Cliente General',
-            phone:     vehicle.cliente?.telefono || '',
-            email:     vehicle.cliente?.email || '',
-            address:   vehicle.cliente?.direccion || '',
-            city:      vehicle.cliente?.ciudad || '',
-            state:     vehicle.cliente?.estado || '',
-            zip:       vehicle.cliente?.zip || '',
+            phone: vehicle.cliente?.telefono || '',
+            email: vehicle.cliente?.email || '',
+            address: vehicle.cliente?.direccion || '',
+            city: vehicle.cliente?.ciudad || '',
+            state: vehicle.cliente?.estado || '',
+            zip: vehicle.cliente?.zip || '',
           });
 
           if (custErr) throw new Error(humanizeDbError(custErr));
@@ -205,11 +227,11 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
           // Provision vehicle in Supabase
           const { data: vehData, error: vehErr } = await upsertVehicle(custData.id, {
             license_plate: vehicle.placa,
-            make:          vehicle.marca,
-            model:         vehicle.modelo,
-            year:          vehicle.anio,
-            vin:           vehicle.vin,
-            color:         vehicle.color,
+            make: vehicle.marca,
+            model: vehicle.modelo,
+            year: vehicle.anio,
+            vin: vehicle.vin,
+            color: vehicle.color,
           });
 
           if (vehErr) throw new Error(humanizeDbError(vehErr));
@@ -252,30 +274,42 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
         }
       }
 
-      // 3. Prepare payload for createInvoice
+      // 3. Prepare payload for createInvoice or updateCompleteInvoice
       const invoicePayload = {
-        invoice_number:    nextInvoiceNumber,
-        date:              form.fecha,
-        service_type:      tipo === 'Estimate' ? 'estimate' : 'final_invoice',
-        payment_method:    form.metodoPago,
-        mileage_in:        parseInt(form.kilometrajeEntrada, 10) || 0,
-        mileage_out:       parseInt(form.kilometrajeSalida, 10) || 0,
+        invoice_number: activeInvoiceNumber,
+        date: form.fecha,
+        service_type: tipo === 'Estimate' ? 'estimate' : 'final_invoice',
+        payment_method: form.metodoPago,
+        mileage_in: parseInt(form.kilometrajeEntrada, 10) || 0,
+        mileage_out: parseInt(form.kilometrajeSalida, 10) || 0,
         subtotal,
-        tax:               impuesto,
-        total_amount:      total,
-        deposit_paid:      deposito,
+        tax: impuesto,
+        total_amount: total,
+        deposit_paid: deposito,
         remaining_balance: saldo,
-        remarks:           form.observaciones.trim(),
-        technician_name:   form.tecnico.trim(),
+        remarks: form.observaciones.trim(),
+        technician_name: form.tecnico.trim(),
       };
 
-      // 4. Insert invoice header + line items + attachments via service layer
-      const { invoice, error: invoiceErr } = await createInvoice(
-        targetVehicleId,
-        invoicePayload,
-        validLineas,
-        uploadedAttachments
-      );
+      // 4. Insert or update invoice header + line items + attachments via service layer
+      let invoiceRes;
+      if (isEditMode) {
+        invoiceRes = await updateCompleteInvoice(
+          serviceToEdit.id,
+          invoicePayload,
+          validLineas,
+          uploadedAttachments
+        );
+      } else {
+        invoiceRes = await createInvoice(
+          targetVehicleId,
+          invoicePayload,
+          validLineas,
+          uploadedAttachments
+        );
+      }
+
+      const { invoice, error: invoiceErr } = invoiceRes;
 
       if (invoiceErr) {
         throw new Error(humanizeDbError(invoiceErr));
@@ -319,9 +353,16 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
         {/* ── Sticky Header ── */}
         <div className="sticky top-0 bg-[#111]/95 backdrop-blur border-b border-[#2a2a2a] px-5 py-4 flex justify-between items-center z-10">
           <div>
-            <h2 className="text-lg font-black text-white">New Service / Invoice</h2>
+            <div className="flex items-center gap-2">
+              {isEditMode && <Edit3 size={18} className="text-sky-400" />}
+              <h2 className="text-lg font-black text-white">
+                {isEditMode
+                  ? `Editar ${tipo === 'Estimate' ? 'Cotización' : 'Factura'}`
+                  : 'New Service / Invoice'}
+              </h2>
+            </div>
             <span className="text-xs text-slate-400">
-              {nextInvoiceNumber} &bull; {vehicle.marca} {vehicle.modelo}&nbsp;
+              {activeInvoiceNumber} &bull; {vehicle.marca} {vehicle.modelo}&nbsp;
               <span className="font-mono uppercase text-slate-600">{vehicle.placa}</span>
             </span>
           </div>
@@ -342,18 +383,17 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Service Type</p>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { key: 'Estimate',      label: '📋 Estimate / Cotización' },
-                { key: 'Final Invoice', label: '✅ Final Invoice'          },
+                { key: 'Estimate', label: ' Estimate / Cotización' },
+                { key: 'Final Invoice', label: ' Final Invoice' },
               ].map(({ key, label }) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setTipo(key)}
-                  className={`py-3.5 rounded-xl font-bold text-sm transition active:scale-95 border-2 ${
-                    tipo === key
+                  className={`py-3.5 rounded-xl font-bold text-sm transition active:scale-95 border-2 ${tipo === key
                       ? 'border-sky-400 text-white shadow-lg shadow-sky-950/40'
                       : 'border-[#2a2a2a] bg-[#0a0a0a] text-slate-400 hover:border-sky-500/30 hover:text-white'
-                  }`}
+                    }`}
                   style={tipo === key ? { background: 'linear-gradient(135deg, #1d4ed8, #2563eb, #38bdf8)' } : {}}
                 >
                   {label}
@@ -393,26 +433,23 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
               {PAYMENT_METHODS.map(({ key, label, icon }) => (
                 <label
                   key={key}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition ${
-                    form.metodoPago === key
+                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition ${form.metodoPago === key
                       ? 'border-sky-500/50 bg-sky-500/10'
                       : 'border-[#1e1e1e] bg-[#0a0a0a] hover:border-[#2a2a2a]'
-                  }`}
+                    }`}
                 >
                   <input type="radio" name="metodoPago" value={key}
                     checked={form.metodoPago === key}
                     onChange={() => set('metodoPago')(key)}
                     className="sr-only" />
                   <span className="text-xl flex-shrink-0">{icon}</span>
-                  <span className={`font-semibold text-sm flex-1 ${
-                    form.metodoPago === key ? 'text-sky-400' : 'text-slate-400'
-                  }`}>
+                  <span className={`font-semibold text-sm flex-1 ${form.metodoPago === key ? 'text-sky-400' : 'text-slate-400'
+                    }`}>
                     {label}
                   </span>
                   {/* Radio indicator */}
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    form.metodoPago === key ? 'border-sky-400' : 'border-slate-600'
-                  }`}>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${form.metodoPago === key ? 'border-sky-400' : 'border-slate-600'
+                    }`}>
                     {form.metodoPago === key && (
                       <div className="w-2.5 h-2.5 rounded-full bg-sky-400" />
                     )}
@@ -426,7 +463,7 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Work Items</p>
-              
+
               {/* Quick Canned Jobs selector */}
               <div className="flex items-center gap-2">
                 <Sparkles size={14} className="text-sky-400" />
@@ -677,11 +714,10 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
                   key={cat.key}
                   type="button"
                   onClick={() => setSelectedPhotoCategory(cat.key)}
-                  className={`text-xs px-3 min-h-[48px] rounded-xl font-semibold transition flex-shrink-0 flex items-center gap-1.5 ${
-                    selectedPhotoCategory === cat.key
+                  className={`text-xs px-3 min-h-[48px] rounded-xl font-semibold transition flex-shrink-0 flex items-center gap-1.5 ${selectedPhotoCategory === cat.key
                       ? 'bg-sky-500 text-white font-bold shadow-md shadow-sky-950/40'
                       : 'bg-[#1a1a1a] text-slate-400 hover:text-white border border-[#2a2a2a]'
-                  }`}
+                    }`}
                 >
                   <span>{cat.icon}</span>
                   <span>{cat.label}</span>
@@ -784,10 +820,10 @@ export default function NewServiceModal({ vehicle, nextInvoiceNumber, onSave, on
               {isSaving ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Guardando en Supabase…</span>
+                  <span>{isEditMode ? 'Actualizando en Supabase…' : 'Guardando en Supabase…'}</span>
                 </>
               ) : (
-                <span>Save Invoice</span>
+                <span>{isEditMode ? 'Guardar Cambios' : 'Save Invoice'}</span>
               )}
             </button>
           </div>

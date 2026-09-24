@@ -32,6 +32,17 @@ export function formatVehicleFromDB(v) {
 
   const invoices = (v.invoices_services || []).map((inv) => {
     const isEstimate = (inv.service_type || '').toLowerCase().includes('estimate');
+    const isAnulada = (inv.remarks || '').toUpperCase().includes('[ANULADA]') ||
+                      (inv.remarks || '').toUpperCase().includes('[CANCELADA]') ||
+                      (inv.service_type || '').toLowerCase().includes('cancel') ||
+                      (inv.service_type || '').toLowerCase().includes('void');
+
+    const anuladaMatch = (inv.remarks || '').match(/\[(?:ANULADA|CANCELADA)(?::\s*([^\]]+))?\]/i);
+    const motivoAnulacion = anuladaMatch ? (anuladaMatch[1] || 'Cancelada por el taller').trim() : '';
+
+    const cleanObservaciones = (inv.remarks || '')
+      .replace(/^\[(?:ANULADA|CANCELADA).*?\]\s*/i, '')
+      .trim();
 
     const lineas = (inv.invoice_items || []).map((item) => ({
       id: item.id,
@@ -66,7 +77,11 @@ export function formatVehicleFromDB(v) {
       id: inv.id,
       invoiceNumber: inv.invoice_number,
       fecha: inv.date,
-      tipo: isEstimate ? 'Estimate' : 'Final Invoice',
+      tipo: isAnulada ? 'Cancelled' : isEstimate ? 'Estimate' : 'Final Invoice',
+      tipoOriginal: isEstimate ? 'Estimate' : 'Final Invoice',
+      isEstimate,
+      isAnulada,
+      motivoAnulacion,
       metodoPago: inv.payment_method || 'Cash',
       kilometrajeEntrada: inv.mileage_in || 0,
       kilometrajeSalida: inv.mileage_out || 0,
@@ -74,8 +89,9 @@ export function formatVehicleFromDB(v) {
       impuesto: Number(inv.tax) || 0,
       total: Number(inv.total_amount) || 0,
       deposito: Number(inv.deposit_paid) || 0,
-      saldo: Number(inv.remaining_balance) || 0,
-      observaciones: inv.remarks || '',
+      saldo: isAnulada ? 0 : (Number(inv.remaining_balance) || 0),
+      observaciones: cleanObservaciones,
+      observacionesRaw: inv.remarks || '',
       tecnico: inv.technician_name || '',
       lineas,
       fotos: attachments,
@@ -532,7 +548,113 @@ export async function createInvoice(vehicleId, invoiceData, lineItems = [], atta
 }
 
 /**
- * Update an existing invoice header.
+ * Fully update an existing invoice/estimate:
+ *   1. Update invoice header in `invoices_services`
+ *   2. Replace line items in `invoice_items` (delete old, insert new)
+ *   3. Insert any new photo attachment rows in `invoice_attachments`
+ *
+ * @param {string}   invoiceId        UUID of the invoice to update.
+ * @param {object}   invoiceData      Header fields.
+ * @param {object[]} [lineItems]      Array of line items.
+ * @param {object[]} [attachmentUrls] New attachments to record.
+ * @returns {{ invoice: object|null, error: object|null }}
+ */
+export async function updateCompleteInvoice(invoiceId, invoiceData, lineItems = [], attachmentUrls = []) {
+  try {
+    if (!invoiceId) throw new Error('Se requiere el ID de la factura a actualizar.');
+
+    const serviceType = (invoiceData.service_type || invoiceData.tipo || '')
+      .toLowerCase()
+      .includes('estimate')
+      ? 'estimate'
+      : 'final_invoice';
+
+    // 1. Update invoice header (sanitized currency with safeMoney)
+    const updatePayload = {
+      date:              invoiceData.date || invoiceData.fecha || new Date().toISOString().split('T')[0],
+      service_type:      serviceType,
+      payment_method:    invoiceData.payment_method || invoiceData.metodoPago || 'Cash',
+      mileage_in:        parseInt(invoiceData.mileage_in ?? invoiceData.kilometrajeEntrada, 10) || 0,
+      mileage_out:       parseInt(invoiceData.mileage_out ?? invoiceData.kilometrajeSalida, 10) || 0,
+      subtotal:          safeMoney(invoiceData.subtotal),
+      tax:               safeMoney(invoiceData.tax ?? invoiceData.impuesto),
+      total_amount:      safeMoney(invoiceData.total_amount ?? invoiceData.total),
+      deposit_paid:      safeMoney(invoiceData.deposit_paid ?? invoiceData.deposito),
+      remaining_balance: safeMoney(invoiceData.remaining_balance ?? invoiceData.saldo),
+      remarks:           invoiceData.remarks || invoiceData.observaciones || '',
+      technician_name:   invoiceData.technician_name || invoiceData.tecnico || '',
+    };
+
+    if (invoiceData.invoice_number || invoiceData.invoiceNumber) {
+      updatePayload.invoice_number = invoiceData.invoice_number || invoiceData.invoiceNumber;
+    }
+
+    const { data: invoice, error: invoiceErr } = await supabase
+      .from('invoices_services')
+      .update(updatePayload)
+      .eq('id', invoiceId)
+      .select()
+      .single();
+
+    if (invoiceErr) {
+      console.error('[tallerService] updateCompleteInvoice header error:', invoiceErr);
+      return { invoice: null, error: invoiceErr };
+    }
+
+    // 2. Sincronizar line items: eliminar anteriores y re-insertar los actualizados
+    const { error: delErr } = await supabase
+      .from('invoice_items')
+      .delete()
+      .eq('invoice_id', invoiceId);
+
+    if (delErr) {
+      console.warn('[tallerService] Advertencia eliminando ítems anteriores:', delErr);
+    }
+
+    if (lineItems.length > 0) {
+      const rows = lineItems.map((item) => ({
+        invoice_id:  invoiceId,
+        qty:         parseFloat(item.qty) || 1,
+        part_number: item.part_number || item.partNo || '',
+        description: item.description || item.descripcion || '',
+        unit_price:  parseFloat(item.unit_price ?? item.precioUnit) || 0,
+        total:       parseFloat(item.total) || ((parseFloat(item.qty) || 1) * (parseFloat(item.unit_price ?? item.precioUnit) || 0)),
+      }));
+
+      const { error: itemsErr } = await supabase.from('invoice_items').insert(rows);
+      if (itemsErr) {
+        console.error('[tallerService] updateCompleteInvoice line_items error:', itemsErr);
+        return { invoice, error: itemsErr };
+      }
+    }
+
+    // 3. Insertar nuevos adjuntos si se añadieron fotos
+    if (attachmentUrls.length > 0) {
+      const attachRows = attachmentUrls.map((att) => {
+        const url = typeof att === 'string' ? att : att.url;
+        const fileType = (typeof att === 'object' && (att.file_type || att.categoria || att.mimeType)) || 'invoice';
+        return {
+          invoice_id: invoiceId,
+          file_url:   url,
+          file_type:  fileType,
+        };
+      });
+
+      const { error: attachErr } = await supabase.from('invoice_attachments').insert(attachRows);
+      if (attachErr) {
+        console.warn('[tallerService] updateCompleteInvoice attachments warning:', attachErr);
+      }
+    }
+
+    return { invoice, error: null };
+  } catch (err) {
+    console.error('[tallerService] Unexpected updateCompleteInvoice error:', err);
+    return { invoice: null, error: err };
+  }
+}
+
+/**
+ * Update an existing invoice header (partial update helper).
  *
  * @param {string} invoiceId  UUID of the invoice row.
  * @param {object} updates    Partial fields to update.
@@ -549,17 +671,89 @@ export async function updateInvoice(invoiceId, updates) {
 }
 
 /**
- * Soft-delete an invoice and cascade-delete all its items and attachments.
+ * Void / Anular an invoice (Enterprise standard method 1):
+ * Keeps the invoice number intact so sequential numbering has no gaps.
+ * Marks the invoice with [ANULADA: motivo], zeroes out remaining_balance.
+ *
+ * @param {string} invoiceId  UUID of the invoice to void.
+ * @param {string} [reason]   Reason for voiding (e.g. 'Cancelada por cliente', 'Error de captura')
+ * @returns {{ data: object|null, error: object|null }}
+ */
+export async function voidInvoice(invoiceId, reason = 'Cancelada por el taller') {
+  try {
+    if (!invoiceId) throw new Error('Se requiere el ID de la factura.');
+
+    // Mock ID fallback
+    if (!isUUID(invoiceId)) {
+      return { data: { id: invoiceId, isAnulada: true, remaining_balance: 0 }, error: null };
+    }
+
+    // Fetch existing remarks
+    const { data: current, error: getErr } = await supabase
+      .from('invoices_services')
+      .select('remarks')
+      .eq('id', invoiceId)
+      .single();
+
+    if (getErr) throw getErr;
+
+    const currentRemarks = current?.remarks || '';
+    const cleanRemarks = currentRemarks.replace(/^\[(?:ANULADA|CANCELADA).*?\]\s*/i, '').trim();
+    const tag = `[ANULADA: ${reason.trim() || 'Cancelada por el taller'}]`;
+    const newRemarks = cleanRemarks ? `${tag}\n${cleanRemarks}` : tag;
+
+    const { data, error } = await supabase
+      .from('invoices_services')
+      .update({
+        remarks: newRemarks,
+        remaining_balance: 0,
+      })
+      .eq('id', invoiceId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[tallerService] voidInvoice error:', error);
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (err) {
+    console.error('[tallerService] Unexpected voidInvoice error:', err);
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Permanently delete an invoice and cascade-delete all its items and attachments.
+ * Used for deleting unapproved estimates or invalid draft entries.
  *
  * @param {string} invoiceId  UUID of the invoice to delete.
  */
 export async function deleteInvoice(invoiceId) {
-  const { error } = await supabase
-    .from('invoices_services')
-    .delete()
-    .eq('id', invoiceId);
+  try {
+    if (!invoiceId) throw new Error('Se requiere el ID de la factura.');
 
-  return { error };
+    // Mock ID fallback
+    if (!isUUID(invoiceId)) {
+      return { error: null };
+    }
+
+    const { error } = await supabase
+      .from('invoices_services')
+      .delete()
+      .eq('id', invoiceId);
+
+    if (error) {
+      console.error('[tallerService] deleteInvoice error:', error);
+      return { error };
+    }
+
+    return { error: null };
+  } catch (err) {
+    console.error('[tallerService] Unexpected deleteInvoice error:', err);
+    return { error: err };
+  }
 }
 
 // ══════════════════════════════════════════════════════════════

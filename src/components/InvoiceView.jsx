@@ -1,4 +1,4 @@
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Printer, Pencil } from 'lucide-react';
 
 const fmt = (n) => `$${(parseFloat(n) || 0).toFixed(2)}`;
 const fmtDate = (d) => {
@@ -18,13 +18,18 @@ const fmtMi = (n) => (n != null && n !== '' ? Number(n).toLocaleString() : '—'
  * Props:
  *   service  {object} — Full service record (from historial)
  *   vehicle  {object} — Vehicle + cliente data
- *   onClose  {fn}    — Back to profile view
+ *   onEdit   {fn}     — [Optional] Open editor for this invoice
+ *   onClose  {fn}     — Back to profile view
  */
-export default function InvoiceView({ service, vehicle, onClose }) {
+export default function InvoiceView({ service, vehicle, onEdit, onClose }) {
   const customer = vehicle?.cliente || service?.vehicle?.cliente || {};
   const lineas = service?.lineas || [];
 
-  const tipoBadge = service?.tipo === 'Estimate'
+  const isAnulada = service?.isAnulada || service?.tipo === 'Cancelled';
+
+  const tipoBadge = isAnulada
+    ? { bg: '#fee2e2', color: '#b91c1c', label: 'FACTURA ANULADA / VOID' }
+    : service?.tipo === 'Estimate'
     ? { bg: '#ede9fe', color: '#5b21b6', label: 'ESTIMATE / COTIZACIÓN' }
     : { bg: '#dbeafe', color: '#1d4ed8', label: 'FINAL INVOICE' };
 
@@ -42,13 +47,24 @@ export default function InvoiceView({ service, vehicle, onClose }) {
         </button>
         <span className="font-bold text-white text-sm hidden sm:block">
           {service?.invoiceNumber} — {vehicle?.marca} {vehicle?.modelo}
+          {isAnulada && <span className="ml-2 text-xs font-black text-red-400 bg-red-950/80 px-2 py-0.5 rounded border border-red-800/60">ANULADA</span>}
         </span>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 min-h-[48px] rounded-xl text-sm font-bold transition active:scale-95 shadow-lg shadow-blue-500/20 cursor-pointer"
-        >
-          <Printer size={16} /> Print / Save PDF
-        </button>
+        <div className="flex items-center gap-2">
+          {onEdit && (
+            <button
+              onClick={() => onEdit(service)}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 border border-slate-700 px-3.5 min-h-[48px] rounded-xl text-sm font-bold transition active:scale-95 cursor-pointer shadow-md"
+            >
+              <Pencil size={15} /> Editar
+            </button>
+          )}
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 min-h-[48px] rounded-xl text-sm font-bold transition active:scale-95 shadow-lg shadow-blue-500/20 cursor-pointer"
+          >
+            <Printer size={16} /> Print / Save PDF
+          </button>
+        </div>
       </div>
 
       {/* ── Invoice Document ── */}
@@ -61,6 +77,20 @@ export default function InvoiceView({ service, vehicle, onClose }) {
           className="max-w-[820px] mx-auto px-8 py-8 text-slate-900"
           style={{ fontSize: '12px' }}
         >
+
+          {/* ══ ANULADA WATERMARK / BANNER ══════════════════════════ */}
+          {isAnulada && (
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-600 rounded-xl text-center">
+              <p className="text-red-700 font-black tracking-widest text-base uppercase">
+                ⚠ FACTURA ANULADA / CANCELADA
+              </p>
+              {service?.motivoAnulacion && (
+                <p className="text-red-600 text-xs font-semibold mt-1">
+                  Motivo: {service.motivoAnulacion}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* ══ SHOP HEADER ══════════════════════════════════════════ */}
           <div className="flex justify-between items-start mb-4 pb-4 border-b-2 border-slate-900">
