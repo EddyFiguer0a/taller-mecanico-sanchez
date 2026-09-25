@@ -1,4 +1,5 @@
-import { ArrowLeft, Printer, Pencil } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Printer, Pencil, X, ChevronUp } from 'lucide-react';
 
 const fmt = (n) => `$${(parseFloat(n) || 0).toFixed(2)}`;
 const fmtDate = (d) => {
@@ -33,48 +34,167 @@ export default function InvoiceView({ service, vehicle, onEdit, onClose }) {
     ? { bg: '#ede9fe', color: '#5b21b6', label: 'ESTIMATE / COTIZACIÓN' }
     : { bg: '#dbeafe', color: '#1d4ed8', label: 'FINAL INVOICE' };
 
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Manage document.title dynamically so browsers name downloaded PDF as "Sanchez Automotive - INV-xxxx"
+  useEffect(() => {
+    const originalTitle = document.title;
+    const invNum = String(service?.invoiceNumber || '');
+    const match = invNum.match(/\d+/);
+    const formattedCode = match ? `INV-${match[0].padStart(4, '0')}` : (invNum || 'INV-0001');
+    const pdfTitle = `Sanchez Automotive - ${formattedCode}`;
+
+    document.title = pdfTitle;
+
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [service?.invoiceNumber]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (isOpen) {
+          setIsOpen(false);
+        } else if (onClose) {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const cityStZip = [customer.ciudad, customer.estado].filter(Boolean).join(', ') + (customer.zip ? ` ${customer.zip}` : '');
 
   return (
     <>
-      {/* ── Action Bar (hidden on print) ── */}
-      <div className="no-print fixed top-0 left-0 right-0 bg-slate-900 text-white px-4 py-3 flex items-center justify-between z-[70] shadow-xl border-b border-slate-700">
-        <button
-          onClick={onClose}
-          className="flex items-center gap-2 text-sm font-semibold hover:text-blue-400 transition px-3 min-h-[48px] rounded-xl hover:bg-slate-800 cursor-pointer"
+      {/* ── Dynamic Floating Action Button (FAB) (hidden on print) ── */}
+      <div
+        className="no-print fixed z-[80] flex flex-col items-end select-none"
+        style={{
+          bottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
+          right: 'max(20px, env(safe-area-inset-right, 20px))',
+        }}
+      >
+        {/* Backdrop for closing when tapping outside */}
+        {isOpen && (
+          <div
+            className="fixed inset-0 bg-slate-950/30 backdrop-blur-[2px] z-[-1] transition-opacity duration-300"
+            onClick={() => setIsOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Speed Dial Menu Items */}
+        <div
+          className={`flex flex-col items-end gap-2.5 mb-3 transition-all duration-300 transform origin-bottom-right ${
+            isOpen
+              ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 scale-90 translate-y-4 pointer-events-none'
+          }`}
         >
-          <ArrowLeft size={18} /> Back
-        </button>
-        <span className="font-bold text-white text-sm hidden sm:block">
-          {service?.invoiceNumber} — {vehicle?.marca} {vehicle?.modelo}
-          {isAnulada && <span className="ml-2 text-xs font-black text-red-400 bg-red-950/80 px-2 py-0.5 rounded border border-red-800/60">ANULADA</span>}
-        </span>
-        <div className="flex items-center gap-2">
+          {/* Action 1: Print / Save PDF */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              const invNum = String(service?.invoiceNumber || '');
+              const match = invNum.match(/\d+/);
+              const formattedCode = match ? `INV-${match[0].padStart(4, '0')}` : (invNum || 'INV-0001');
+              document.title = `Sanchez Automotive - ${formattedCode}`;
+              setTimeout(() => window.print(), 120);
+            }}
+            className="group flex items-center gap-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white pl-4 pr-5 py-3 rounded-full shadow-2xl shadow-blue-600/40 border border-blue-400/30 active:scale-95 transition-all duration-200 cursor-pointer"
+          >
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <Printer size={17} className="text-white" />
+            </div>
+            <span className="font-bold text-xs tracking-wider uppercase whitespace-nowrap">
+              Imprimir / PDF
+            </span>
+          </button>
+
+          {/* Action 2: Edit Invoice (if available) */}
           {onEdit && (
             <button
-              onClick={() => onEdit(service)}
-              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 border border-slate-700 px-3.5 min-h-[48px] rounded-xl text-sm font-bold transition active:scale-95 cursor-pointer shadow-md"
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onEdit(service);
+              }}
+              className="group flex items-center gap-3 bg-slate-900/95 hover:bg-slate-800 text-white pl-4 pr-5 py-3 rounded-full shadow-2xl border border-slate-700 active:scale-95 transition-all duration-200 cursor-pointer backdrop-blur-md"
             >
-              <Pencil size={15} /> Editar
+              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
+                <Pencil size={16} className="text-sky-400" />
+              </div>
+              <span className="font-bold text-xs tracking-wider uppercase text-slate-200 whitespace-nowrap">
+                Editar Factura
+              </span>
             </button>
           )}
+
+          {/* Action 3: Return / Back */}
           <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 min-h-[48px] rounded-xl text-sm font-bold transition active:scale-95 shadow-lg shadow-blue-500/20 cursor-pointer"
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              onClose?.();
+            }}
+            className="group flex items-center gap-3 bg-slate-900/95 hover:bg-slate-800 text-white pl-4 pr-5 py-3 rounded-full shadow-2xl border border-slate-700 active:scale-95 transition-all duration-200 cursor-pointer backdrop-blur-md"
           >
-            <Printer size={16} /> Print / Save PDF
+            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
+              <ArrowLeft size={16} className="text-slate-300" />
+            </div>
+            <span className="font-bold text-xs tracking-wider uppercase text-slate-200 whitespace-nowrap">
+              Regresar
+            </span>
           </button>
         </div>
+
+        {/* Dynamic Trigger Button */}
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-expanded={isOpen}
+          aria-label={isOpen ? 'Cerrar opciones' : 'Abrir opciones de factura'}
+          className={`flex items-center gap-2.5 px-5 py-3.5 rounded-full shadow-2xl transition-all duration-300 active:scale-95 cursor-pointer ${
+            isOpen
+              ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40'
+              : 'bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 hover:from-slate-800 hover:to-slate-800 text-white border border-slate-700/80 shadow-slate-950/60 hover:border-blue-500/60'
+          }`}
+        >
+          {isOpen ? (
+            <>
+              <X size={18} className="text-white" />
+              <span className="text-xs font-black tracking-wider uppercase">Cerrar</span>
+            </>
+          ) : (
+            <>
+              <div className="relative flex items-center justify-center">
+                <Printer size={17} className="text-blue-400" />
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+              </div>
+              <span className="text-xs font-black tracking-wider uppercase text-slate-100">
+                Opciones
+              </span>
+              <ChevronUp size={16} className="text-slate-400" />
+            </>
+          )}
+        </button>
       </div>
 
       {/* ── Invoice Document ── */}
       <div
-        className="bg-white min-h-screen pt-[56px] no-print-padding"
+        className="bg-slate-100/70 min-h-screen py-6 sm:py-10 px-2 sm:px-4 no-print-padding print:bg-white print:p-0"
         style={{ fontFamily: "'Arial', 'Helvetica', sans-serif" }}
       >
         <div
           id="invoice-document"
-          className="max-w-[820px] mx-auto px-8 py-8 text-slate-900"
+          className="max-w-[820px] mx-auto bg-white shadow-xl print:shadow-none px-6 sm:px-10 py-8 text-slate-900 border border-slate-200/80 print:border-none rounded-2xl print:rounded-none"
           style={{ fontSize: '12px' }}
         >
 
@@ -267,28 +387,19 @@ export default function InvoiceView({ service, vehicle, onEdit, onClose }) {
             </div>
 
             {/* Financials */}
-            <div className="print-financial-box" style={{ border: '1px solid #cbd5e1', padding: '12px' }}>
+            <div className="print-financial-box" style={{ border: '1px solid #cbd5e1', padding: '14px 16px', background: '#f8fafc' }}>
               {[
-                { label: 'Subtotal:', value: fmt(service.subtotal), bold: false },
-                { label: 'Tax:', value: fmt(service.impuesto), bold: false },
+                { label: 'Subtotal:', value: fmt(service.subtotal) },
+                { label: 'Tax:', value: fmt(service.impuesto) },
               ].map(({ label, value }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '6px', color: '#475569' }}>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '8px', color: '#475569' }}>
                   <span>{label}</span><span style={{ fontWeight: '600' }}>{value}</span>
                 </div>
               ))}
               {/* TOTAL */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #0f172a', paddingTop: '6px', marginTop: '4px', marginBottom: '8px' }}>
-                <span style={{ fontWeight: '900', fontSize: '13px', color: '#0f172a' }}>TOTAL:</span>
-                <span style={{ fontWeight: '900', fontSize: '13px', color: '#0f172a' }}>{fmt(service.total)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '6px', color: '#475569' }}>
-                <span>50% Deposit Paid:</span>
-                <span style={{ fontWeight: '600' }}>({fmt(service.deposito)})</span>
-              </div>
-              {/* BALANCE */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #0f172a', paddingTop: '6px', marginTop: '4px' }}>
-                <span style={{ fontWeight: '900', fontSize: '13px', color: '#0f172a' }}>Balance Due:</span>
-                <span style={{ fontWeight: '900', fontSize: '13px', color: '#0f172a' }}>{fmt(service.saldo)}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #0f172a', paddingTop: '8px', marginTop: '6px' }}>
+                <span style={{ fontWeight: '900', fontSize: '14px', color: '#0f172a', letterSpacing: '0.04em' }}>TOTAL:</span>
+                <span style={{ fontWeight: '900', fontSize: '15px', color: '#0f172a' }}>{fmt(service.total)}</span>
               </div>
             </div>
           </div>
